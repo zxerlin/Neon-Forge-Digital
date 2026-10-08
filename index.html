@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeonForge OS: Autonomous Digital Goods Empire (VSO1)</title>
+    <meta name="description" content="Self-running autonomous digital goods factory, Etsy storefront, multi-agent AI pipeline, custom CRM, and inventory management with electric neon cyberpunk command matrix." />
+    <meta property="og:title" content="NeonForge OS: Autonomous Digital Goods Empire (VSO1)" />
+    <meta property="og:description" content="Self-running autonomous digital goods factory, Etsy storefront, multi-agent AI pipeline, custom CRM, and inventory management with electric neon cyberpunk command matrix." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Ads Lightweight Dynamic Tracker -->
+    <script>
+      (function() {
+        // Parse and store UTM & Google Click ID parameters for server-side attribution
+        const urlParams = new URLSearchParams(window.location.search);
+        const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'wbraid', 'gbraid'];
+        const savedParams = {};
+        
+        trackingParams.forEach(param => {
+          const val = urlParams.get(param);
+          if (val) {
+            savedParams[param] = val;
+            localStorage.setItem(`neonforge_${param}`, val);
+          }
+        });
+
+        // Initialize Google Ads global site tag if Tag ID exists
+        const googleAdsId = localStorage.getItem('neonforge_google_ads_tag_id') || window.VITE_GOOGLE_ADS_ID;
+        if (googleAdsId) {
+          const script = document.createElement('script');
+          script.async = true;
+          script.src = `https://www.googletagmanager.com/gtag/js?id=${googleAdsId}`;
+          document.head.appendChild(script);
+
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          window.gtag = gtag;
+          gtag('js', new Date());
+          gtag('config', googleAdsId, {
+            'cookie_flags': 'SameSite=None;Secure',
+            'store_gclid': true
+          });
+          console.log(`[Google Ads] Site tag initialized for ${googleAdsId}`);
+        }
+      })();
+    </script>
+  </head>
+  <body class="bg-[#07090e] text-slate-100 font-sans antialiased overflow-x-hidden selection:bg-cyan-500 selection:text-black">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

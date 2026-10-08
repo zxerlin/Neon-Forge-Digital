@@ -1,0 +1,8 @@
+{
+  "name": " Neon Forge Digital: Autonomous Digital Goods Empire (VSO1)",
+  "description": "Self-running autonomous digital goods factory, Etsy storefront, multi-agent AI pipeline, custom CRM, and inventory management with electric neon cyberpunk command matrix.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

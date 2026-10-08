@@ -1,0 +1,270 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-void: #05070c;
+    --bg-surface: #07090e;
+    --bg-card: #090d18;
+    --bg-elevated: #0e1526;
+    --border-theme: rgba(51, 65, 85, 0.45);
+    --border-glow: rgba(0, 240, 255, 0.4);
+    --neon-cyan: #00f0ff;
+    --neon-magenta: #ff007f;
+    --neon-lime: #39ff14;
+    --neon-amber: #ffb700;
+    --neon-purple: #b026ff;
+    --neon-blue: #3b82f6;
+    --neon-red: #ff3344;
+  }
+
+  body {
+    background-color: var(--bg-void, #05070c);
+    color: #e2e8f0;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    transition: background-color 0.3s ease;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* 3D Perspective & Spatial Environment */
+.perspective-container {
+  perspective: 1400px;
+  perspective-origin: 50% 35%;
+  transform-style: preserve-3d;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* 3D Isometric View Angles */
+.iso-3d-grid {
+  transform: rotateX(54deg) rotateZ(-28deg) rotateY(4deg);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tactical-3d-grid {
+  transform: rotateX(38deg) rotateZ(-12deg);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.flat-2d-grid {
+  transform: rotateX(0deg) rotateZ(0deg);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 3D Extruded Chamber Blocks */
+.chamber-3d-block {
+  transform-style: preserve-3d;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+  position: relative;
+}
+
+.chamber-3d-block:hover {
+  transform: translateZ(35px) translateY(-8px);
+}
+
+/* 3D Layer Elevation */
+.layer-elevated-1 {
+  transform: translateZ(14px);
+}
+
+.layer-elevated-2 {
+  transform: translateZ(28px);
+}
+
+.layer-elevated-3 {
+  transform: translateZ(48px);
+}
+
+/* Floating 3D Hologram Animation */
+@keyframes float3D {
+  0%, 100% {
+    transform: translateZ(30px) translateY(0px) rotateY(0deg);
+  }
+  50% {
+    transform: translateZ(45px) translateY(-10px) rotateY(180deg);
+  }
+}
+
+.float-3d-hologram {
+  animation: float3D 6s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+/* 3D Robot Floating Walk Animation */
+@keyframes robotFloat3D {
+  0%, 100% {
+    transform: translateZ(20px) translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateZ(28px) translateY(-5px) scale(1.04);
+  }
+}
+
+.robot-3d-float {
+  animation: robotFloat3D 2.5s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+/* 3D Ground Drop Shadows */
+.shadow-3d-ground {
+  filter: drop-shadow(0 20px 25px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 35px rgba(0, 240, 255, 0.25));
+}
+
+/* Exuberant Neon Glows */
+.glow-cyan {
+  box-shadow: 0 0 15px color-mix(in srgb, var(--neon-cyan) 40%, transparent);
+}
+
+.glow-cyan-lg {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--neon-cyan) 55%, transparent), 0 0 60px color-mix(in srgb, var(--neon-cyan) 25%, transparent), inset 0 0 20px color-mix(in srgb, var(--neon-cyan) 35%, transparent);
+}
+
+.glow-magenta {
+  box-shadow: 0 0 15px color-mix(in srgb, var(--neon-magenta) 40%, transparent);
+}
+
+.glow-magenta-lg {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--neon-magenta) 55%, transparent), 0 0 60px color-mix(in srgb, var(--neon-magenta) 25%, transparent), inset 0 0 20px color-mix(in srgb, var(--neon-magenta) 35%, transparent);
+}
+
+.glow-lime {
+  box-shadow: 0 0 15px color-mix(in srgb, var(--neon-lime) 40%, transparent);
+}
+
+.glow-lime-lg {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--neon-lime) 55%, transparent), 0 0 60px color-mix(in srgb, var(--neon-lime) 25%, transparent), inset 0 0 20px color-mix(in srgb, var(--neon-lime) 35%, transparent);
+}
+
+.glow-amber {
+  box-shadow: 0 0 15px color-mix(in srgb, var(--neon-amber) 40%, transparent);
+}
+
+.glow-amber-lg {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--neon-amber) 55%, transparent), 0 0 60px color-mix(in srgb, var(--neon-amber) 25%, transparent), inset 0 0 20px color-mix(in srgb, var(--neon-amber) 35%, transparent);
+}
+
+.glow-purple-lg {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--neon-purple) 55%, transparent), 0 0 60px color-mix(in srgb, var(--neon-purple) 25%, transparent), inset 0 0 20px color-mix(in srgb, var(--neon-purple) 35%, transparent);
+}
+
+.glow-red-lg {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--neon-red) 55%, transparent), 0 0 60px color-mix(in srgb, var(--neon-red) 25%, transparent), inset 0 0 20px color-mix(in srgb, var(--neon-red) 35%, transparent);
+}
+
+/* Conveyor belt animated stripes */
+@keyframes conveyorMove {
+  0% { background-position: 0 0; }
+  100% { background-position: 28px 0; }
+}
+
+.conveyor-belt {
+  background: repeating-linear-gradient(
+    45deg,
+    #2a2010,
+    #2a2010 7px,
+    #eab308 7px,
+    #eab308 14px
+  );
+  background-size: 28px 28px;
+  animation: conveyorMove 1.2s linear infinite;
+}
+
+.conveyor-belt-fast {
+  background: repeating-linear-gradient(
+    45deg,
+    #112520,
+    #112520 7px,
+    #22c55e 7px,
+    #22c55e 14px
+  );
+  background-size: 28px 28px;
+  animation: conveyorMove 0.7s linear infinite;
+}
+
+/* Robot walking bobbing animation */
+@keyframes robotWalk {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-2deg); }
+  50% { transform: translateY(-1px) rotate(0deg); }
+  75% { transform: translateY(-3px) rotate(2deg); }
+}
+
+.robot-walk {
+  animation: robotWalk 0.9s ease-in-out infinite;
+}
+
+@keyframes robotPatrol {
+  0% { transform: translateX(0px); }
+  45% { transform: translateX(36px); }
+  50% { transform: translateX(36px) scaleX(-1); }
+  95% { transform: translateX(0px) scaleX(-1); }
+  100% { transform: translateX(0px) scaleX(1); }
+}
+
+.robot-patrol {
+  animation: robotPatrol 7s ease-in-out infinite;
+}
+
+/* Radar spin */
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.radar-sweep {
+  animation: radarSweep 4s linear infinite;
+}
+
+/* Cyber Grids */
+.cyber-grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.cyber-industrial-floor {
+  background-color: #080c14;
+  background-image: 
+    radial-gradient(rgba(0, 240, 255, 0.18) 1.5px, transparent 1.5px),
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 20px 20px, 40px 40px, 40px 40px;
+}
+
+/* Scanline effect */
+.scanline-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.02), rgba(0, 255, 0, 0.04));
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #05070c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00f0ff;
+}
