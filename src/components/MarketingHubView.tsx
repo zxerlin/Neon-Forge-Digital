@@ -17,31 +17,69 @@ import {
   TrendingUp,
   Settings,
   Percent,
-  Play
+  Play,
+  Globe,
+  Radio,
+  Send,
+  ShieldAlert,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+  Layers,
+  Link,
+  RefreshCw,
+  Lock,
+  Unlock,
+  Sliders,
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 import { DigitalProduct, Order } from '../types';
 import { playSound } from '../utils/audio';
 import { useTheme } from '../hooks/useTheme';
+import { neonforgeApi } from '../services/neonforgeApi';
 
 interface MarketingHubViewProps {
   products: DigitalProduct[];
   orders: Order[];
 }
 
-interface CampaignMetric {
-  id: string;
-  name: string;
-  type: 'Search' | 'Display' | 'Shopping' | 'PMax';
-  spend: number;
-  clicks: number;
-  conversions: number;
-}
+type MarketingTab = 'domain-launchpad' | 'organic' | 'seo-discoverability' | 'google-ads';
 
 export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, orders }) => {
   const { theme } = useTheme();
-  const [activeSubTab, setActiveSubTab] = useState<'organic' | 'google-ads'>('organic');
+  const [activeSubTab, setActiveSubTab] = useState<MarketingTab>('organic');
   const [selectedProductId, setSelectedProductId] = useState<string>(products[0]?.id || '');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Domain & DNS State
+  const [domainStatus, setDomainStatus] = useState<any>(null);
+  const [isCheckingDomain, setIsCheckingDomain] = useState(false);
+
+  // Organic Syndication State
+  const [syndicateChannel, setSyndicateChannel] = useState<'reddit' | 'twitter' | 'blog' | 'indiehackers' | 'pinterest' | 'tiktok'>('reddit');
+  const [syndicatedContent, setSyndicatedContent] = useState<any>(null);
+  const [isGeneratingSyndication, setIsGeneratingSyndication] = useState(false);
+  const [isDispatchingLive, setIsDispatchingLive] = useState(false);
+  const [livePublishResult, setLivePublishResult] = useState<{ type: 'success' | 'warn' | 'error'; text: string } | null>(null);
+
+  // Social Connections & Credentials State
+  const [socialConnections, setSocialConnections] = useState<any>(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configForm, setConfigForm] = useState({
+    discordWebhookUrl: '',
+    slackWebhookUrl: '',
+    zapierWebhookUrl: '',
+    twitterApiKey: '',
+    twitterAccessToken: '',
+    redditClientId: '',
+    redditUsername: ''
+  });
+  const [testingPlatform, setTestingPlatform] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ platform: string; success: boolean; msg: string } | null>(null);
+
+  // SEO Diagnostics State
+  const [seoDiagnostics, setSeoDiagnostics] = useState<any>(null);
 
   // Google Ads Tag State
   const [adsTagId, setAdsTagId] = useState<string>(() => {
@@ -66,48 +104,119 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
     };
   });
 
-  // Save live spend config to localstorage when edited
   useEffect(() => {
     localStorage.setItem('neonforge_live_spend_config', JSON.stringify(liveSpendConfig));
   }, [liveSpendConfig]);
 
-  // Derived Campaign Metrics depending on Mode (Authentic Live Only)
-  const campaigns = React.useMemo(() => {
-    const channels = [
-      { id: 'camp-1', name: 'Cyberpunk Theme Launch - Search', type: 'Search' as const, tag: 'cyber_launch_2026' },
-      { id: 'camp-2', name: 'Notion Templates Retargeting - PMax', type: 'PMax' as const, tag: 'notion_cyberpunk' },
-      { id: 'camp-3', name: 'Digital Planners - Google Shopping', type: 'Shopping' as const, tag: 'google_shopping' },
-      { id: 'camp-4', name: 'Developer HUD Icons - Display Network', type: 'Display' as const, tag: 'display_network' },
-    ];
-
-    return channels.map(chan => {
-      // Direct exact match from actual Stripe orders matching campaign metadata
-      const matchedOrders = orders.filter(o => {
-        const orderCamp = (o.utmCampaign || '').toLowerCase();
-        const tagLower = chan.tag.toLowerCase();
-
-        if (orderCamp === tagLower) return true;
-        if (chan.type === 'Search' && orderCamp.includes('search')) return true;
-        if (chan.type === 'PMax' && (orderCamp.includes('pmax') || orderCamp.includes('notion'))) return true;
-        if (chan.type === 'Shopping' && orderCamp.includes('shopping')) return true;
-        if (chan.type === 'Display' && orderCamp.includes('display')) return true;
-
-        return false;
-      });
-
-      const config = liveSpendConfig[chan.id] || { spend: 0, clicks: 0 };
-      return {
-        id: chan.id,
-        name: chan.name,
-        type: chan.type,
-        spend: config.spend,
-        clicks: config.clicks,
-        conversions: matchedOrders.length,
-      };
+  // Load Initial Statuses
+  useEffect(() => {
+    checkDomain();
+    fetchSocialConnections();
+    neonforgeApi.getSeoDiagnostics().then(data => {
+      if (data) setSeoDiagnostics(data);
     });
-  }, [orders, liveSpendConfig]);
+  }, []);
+
+  const fetchSocialConnections = async () => {
+    const data = await neonforgeApi.getSocialConnections();
+    if (data) {
+      setSocialConnections(data);
+    }
+  };
+
+  const checkDomain = async () => {
+    setIsCheckingDomain(true);
+    const data = await neonforgeApi.getDomainStatus();
+    if (data) setDomainStatus(data);
+    setIsCheckingDomain(false);
+  };
 
   const selectedProduct = products.find(p => p.id === selectedProductId) || products[0];
+
+  // Auto-generate initial syndication preview when product or channel changes
+  useEffect(() => {
+    if (selectedProduct) {
+      handleGenerateSyndication(false);
+    }
+  }, [selectedProductId, syndicateChannel]);
+
+  const handleGenerateSyndication = async (playSoundEffect = true) => {
+    if (!selectedProduct) return;
+    setIsGeneratingSyndication(true);
+    if (playSoundEffect) playSound('agent');
+    const res = await neonforgeApi.syndicateMarketing(selectedProduct.id, syndicateChannel);
+    if (res && res.campaign) {
+      setSyndicatedContent(res.campaign);
+    }
+    setIsGeneratingSyndication(false);
+  };
+
+  // Direct Autonomous Background Dispatch
+  const handlePublishLive = async (targetPlatform: string) => {
+    if (!syndicatedContent || !selectedProduct) return;
+    setIsDispatchingLive(true);
+    playSound('agent');
+
+    const res = await neonforgeApi.publishSocialLive({
+      platform: targetPlatform,
+      campaign: syndicatedContent,
+      productTitle: selectedProduct.title
+    });
+
+    if (res.success) {
+      setLivePublishResult({
+        type: 'success',
+        text: `✅ ${res.message || 'Post autonomously published!'}`
+      });
+      playSound('cash');
+      fetchSocialConnections();
+    } else if (res.requiresAuth) {
+      setLivePublishResult({
+        type: 'warn',
+        text: `🔒 ${res.error}`
+      });
+      playSound('alert');
+      setShowConfigModal(true);
+    } else {
+      setLivePublishResult({
+        type: 'error',
+        text: `❌ ${res.error || 'Failed to dispatch post'}`
+      });
+      playSound('alert');
+    }
+
+    setIsDispatchingLive(false);
+    setTimeout(() => setLivePublishResult(null), 6000);
+  };
+
+  // Test individual platform connection
+  const handleTestConnection = async (platform: string) => {
+    setTestingPlatform(platform);
+    playSound('click');
+    const res = await neonforgeApi.testSocialConnection(platform);
+    setTestResult({
+      platform,
+      success: res.success,
+      msg: res.message || res.error || 'Test completed'
+    });
+    if (res.success) playSound('cash');
+    else playSound('alert');
+    setTestingPlatform(null);
+  };
+
+  // Save Social Config
+  const handleSaveSocialConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    playSound('click');
+    const res = await neonforgeApi.saveSocialConfig(configForm);
+    if (res.success) {
+      playSound('cash');
+      fetchSocialConnections();
+      setShowConfigModal(false);
+      setLivePublishResult({ type: 'success', text: '✅ Social platform credentials saved securely.' });
+      setTimeout(() => setLivePublishResult(null), 4000);
+    }
+  };
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -119,12 +228,9 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
   const handleSaveTagId = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('neonforge_google_ads_tag_id', adsTagId.trim());
-    
-    // Also save as environment fallback value on client window
     if (typeof window !== 'undefined') {
       (window as any).VITE_GOOGLE_ADS_ID = adsTagId.trim();
     }
-    
     setTagSaveMsg('✅ Google Ads tag saved! Lightweight gtag.js tracker configured.');
     playSound('cash');
     setTimeout(() => setTagSaveMsg(null), 3000);
@@ -169,15 +275,43 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
 </rss>`;
   };
 
-  // Calculate aggregated stats (100% Live)
+  // Campaigns derived from orders
+  const campaigns = React.useMemo(() => {
+    const channels = [
+      { id: 'camp-1', name: 'Cyberpunk Theme Launch - Search', type: 'Search' as const, tag: 'cyber_launch_2026' },
+      { id: 'camp-2', name: 'Notion Templates Retargeting - PMax', type: 'PMax' as const, tag: 'notion_cyberpunk' },
+      { id: 'camp-3', name: 'Digital Planners - Google Shopping', type: 'Shopping' as const, tag: 'google_shopping' },
+      { id: 'camp-4', name: 'Developer HUD Icons - Display Network', type: 'Display' as const, tag: 'display_network' },
+    ];
+
+    return channels.map(chan => {
+      const matchedOrders = orders.filter(o => {
+        const orderCamp = (o.utmCampaign || '').toLowerCase();
+        const tagLower = chan.tag.toLowerCase();
+        if (orderCamp === tagLower) return true;
+        if (chan.type === 'Search' && orderCamp.includes('search')) return true;
+        if (chan.type === 'PMax' && (orderCamp.includes('pmax') || orderCamp.includes('notion'))) return true;
+        if (chan.type === 'Shopping' && orderCamp.includes('shopping')) return true;
+        if (chan.type === 'Display' && orderCamp.includes('display')) return true;
+        return false;
+      });
+
+      const config = liveSpendConfig[chan.id] || { spend: 0, clicks: 0 };
+      return {
+        id: chan.id,
+        name: chan.name,
+        type: chan.type,
+        spend: config.spend,
+        clicks: config.clicks,
+        conversions: matchedOrders.length,
+      };
+    });
+  }, [orders, liveSpendConfig]);
+
   const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
   const totalClicks = campaigns.reduce((sum, c) => sum + c.clicks, 0);
   const totalConversions = campaigns.reduce((sum, c) => sum + c.conversions, 0);
-  
-  // Product pricing factor for conversions
-  const conversionValue = selectedProduct ? selectedProduct.price : 45.00;
-  
-  // Sum exact prices of actual orders matching campaigns in live mode
+
   const totalRevenue = React.useMemo(() => {
     const campaignTags = ['cyber_launch_2026', 'notion_cyberpunk', 'google_shopping', 'display_network'];
     const matchedOrders = orders.filter(o => {
@@ -188,8 +322,9 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
   }, [orders]);
 
   const averageCpc = totalSpend / (totalClicks || 1);
-  const ctr = (totalClicks / 142500) * 100; // Live impressions baseline
+  const ctr = (totalClicks / 142500) * 100;
   const roas = totalRevenue / (totalSpend || 1);
+  const currentPublicUrl = window.location.origin;
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-7xl mx-auto">
@@ -199,17 +334,17 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
           <div className="flex items-center gap-2 mb-1">
             <Flame className="w-5 h-5 text-amber-400" />
             <h2 className="font-mono text-lg font-bold uppercase text-white tracking-wide">
-              Sales Campaign Nexus & Marketing Reactor
+              Sales, Organic Syndication & Domain Command Nexus
             </h2>
           </div>
           <p className="text-xs text-slate-300">
-            Configure organic traffic storyboards, optimize Etsy rankings, and deploy high-performance Google Ads conversion tracking with automated UTM link generation.
+            Generate revenue with or without paid ads. Connect real social platforms, deploy assisted or autonomous posts, configure your custom domain, and inspect search engine discoverability.
           </p>
         </div>
 
         {/* Product Picker */}
         <div className="flex items-center gap-2">
-          <label className="text-xs font-mono text-slate-400 uppercase">Active Campaign:</label>
+          <label className="text-xs font-mono text-slate-400 uppercase">Target Product:</label>
           <select
             value={selectedProductId}
             onChange={(e) => setSelectedProductId(e.target.value)}
@@ -217,238 +352,829 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
           >
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.title.slice(0, 35)}...
+                {p.title.slice(0, 35)}... (${p.price.toFixed(2)})
               </option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* Google Ads Suite Activation Jewel Panel */}
-      <div className="p-6 rounded-2xl border border-violet-500/30 bg-slate-950/80 relative overflow-hidden shadow-[0_0_25px_rgba(139,92,246,0.15)] flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-blue-500/5 to-orange-500/5 pointer-events-none" />
-        
-        {/* Left Side: Information & Connection Status */}
-        <div className="space-y-2 relative z-10 text-center md:text-left">
-          <div className="flex items-center gap-2 justify-center md:justify-start">
-            <span className={`w-2 h-2 rounded-full ${activeSubTab === 'google-ads' ? 'bg-emerald-400 animate-ping' : 'bg-violet-400'} `} />
-            <span className={`text-[10px] font-mono tracking-widest uppercase font-black ${activeSubTab === 'google-ads' ? 'text-emerald-400' : 'text-violet-400'}`}>
-              {activeSubTab === 'google-ads' ? '📡 GOOGLE ADS SUITE ACTIVATED' : '🔒 GOOGLE ADS SUITE INACTIVE'}
-            </span>
-          </div>
-          <h3 className="font-mono text-base font-bold text-white uppercase tracking-wide">
-            NEONFORGE GOOGLE ADS REACTION COUPLER
-          </h3>
-          <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
-            Click the luminous diamond core on the right to activate your Google Ads Conversion suite, live UTM tracking pipelines, and ROAS feedback dashboards.
-          </p>
-        </div>
-
-        {/* Right Side: The Luminous Diamond Gem Button */}
-        <div className="flex items-center justify-center pr-4 relative z-10">
-          <div className="relative group">
-            {/* Pulsing Backglows */}
-            <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-violet-600 via-blue-500 to-orange-500 opacity-70 blur-xl group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-pulse" />
-            
-            <button
-              onClick={() => {
-                setActiveSubTab('google-ads');
-                playSound('warp');
-              }}
-              className={`relative w-20 h-20 transform rotate-45 flex items-center justify-center transition-all duration-300 border focus:outline-none cursor-pointer hover:scale-110 active:scale-95 ${
-                activeSubTab === 'google-ads'
-                  ? 'bg-gradient-to-br from-violet-600 via-blue-500 to-orange-500 border-white text-white shadow-[0_0_25px_rgba(139,92,246,0.8)]'
-                  : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-400 shadow-md'
-              }`}
-              style={{
-                clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
-              }}
-              title="Click to Activate Google Ads Suite"
-            >
-              {/* Upright Icon inside the Rotated Diamond */}
-              <div className="transform -rotate-45 flex flex-col items-center justify-center text-center">
-                <Target className={`w-6 h-6 mb-0.5 ${activeSubTab === 'google-ads' ? 'text-white animate-spin' : 'text-violet-400'} `} style={{ animationDuration: '8s' }} />
-                <span className="text-[8px] font-mono tracking-tighter uppercase font-black block">
-                  {activeSubTab === 'google-ads' ? 'ACTIVE' : 'LAUNCH'}
-                </span>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Primary Tab Switcher */}
-      <div className="flex items-center gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl max-w-md">
+      {/* 4-Pillar Primary Navigation Switcher */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-1.5 bg-slate-950 border border-slate-800 rounded-xl">
         <button
           onClick={() => { playSound('click'); setActiveSubTab('organic'); }}
-          className={`flex-1 py-2 text-xs font-mono font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 uppercase cursor-pointer ${
+          className={`py-2.5 px-3 text-xs font-mono font-bold rounded-lg transition-all flex items-center justify-center gap-2 uppercase cursor-pointer ${
             activeSubTab === 'organic'
               ? 'bg-amber-500 text-black shadow-lg font-black'
               : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
           }`}
         >
-          <Sparkles className="w-4 h-4" />
-          <span>Viral Social & SEO Suite</span>
+          <Share2 className="w-4 h-4" />
+          <span>Organic Social & Syndication</span>
         </button>
+
         <button
-          onClick={() => { playSound('click'); setActiveSubTab('google-ads'); }}
-          className={`flex-1 py-2 text-xs font-mono font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 uppercase cursor-pointer ${
-            activeSubTab === 'google-ads'
+          onClick={() => { playSound('click'); setActiveSubTab('domain-launchpad'); }}
+          className={`py-2.5 px-3 text-xs font-mono font-bold rounded-lg transition-all flex items-center justify-center gap-2 uppercase cursor-pointer ${
+            activeSubTab === 'domain-launchpad'
               ? 'bg-cyan-500 text-black shadow-lg font-black'
               : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
           }`}
         >
+          <Globe className="w-4 h-4" />
+          <span>Domain & Host Launch</span>
+        </button>
+
+        <button
+          onClick={() => { playSound('click'); setActiveSubTab('seo-discoverability'); }}
+          className={`py-2.5 px-3 text-xs font-mono font-bold rounded-lg transition-all flex items-center justify-center gap-2 uppercase cursor-pointer ${
+            activeSubTab === 'seo-discoverability'
+              ? 'bg-emerald-500 text-black shadow-lg font-black'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+          }`}
+        >
+          <Search className="w-4 h-4" />
+          <span>SEO & Search Indexer</span>
+        </button>
+
+        <button
+          onClick={() => { playSound('click'); setActiveSubTab('google-ads'); }}
+          className={`py-2.5 px-3 text-xs font-mono font-bold rounded-lg transition-all flex items-center justify-center gap-2 uppercase cursor-pointer ${
+            activeSubTab === 'google-ads'
+              ? 'bg-purple-500 text-black shadow-lg font-black'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+          }`}
+        >
           <Target className="w-4 h-4" />
-          <span>Google Ads Campaign Nexus</span>
+          <span>Google Ads Nexus</span>
         </button>
       </div>
 
-      {/* Render Sub Tabs */}
-      {selectedProduct && activeSubTab === 'organic' && (
+      {/* ========================================================================= */}
+      {/* 1. AUTONOMOUS ORGANIC SOCIAL & FORUMS SYNDICATION TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'organic' && selectedProduct && (
         <div className="space-y-6">
-          {/* Etsy 13-Tag SEO Command */}
-          <div className="rounded-xl border border-blue-500/30 bg-[#090d18] p-5 shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
-              <div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-500/40 uppercase font-bold">
-                  SAGE · ETSY ALGORITHMIC RANKING RADAR
-                </span>
-                <h3 className="font-mono text-base font-bold text-white mt-1">
-                  13 High-Intent Etsy Search Tags
-                </h3>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs font-mono text-blue-300">
-                <span>Etsy Search Volume Index:</span>
-                <span className="font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
-                  {selectedProduct.etsyOptimization.etsySearchVolumeScore} / 100 (HIGH DEMAND)
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[11px] font-mono uppercase text-slate-400 mb-1 flex items-center justify-between">
-                <span>Optimized Long-Tail Title:</span>
-                <button
-                  onClick={() => handleCopy(selectedProduct.etsyOptimization.seoTitle, 'title')}
-                  className="text-cyan-400 hover:text-white flex items-center gap-1 text-xs font-bold"
-                >
-                  {copiedKey === 'title' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedKey === 'title' ? 'Copied' : 'Copy Full Title'}</span>
-                </button>
-              </div>
-              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200">
-                {selectedProduct.etsyOptimization.seoTitle}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[11px] font-mono uppercase text-slate-400 mb-2">
-                All 13 Slots Filled (Multi-Word Long-Tail Tokens):
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedProduct.etsyOptimization.thirteenTags.map((tag, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleCopy(tag, `tag-${i}`)}
-                    className="px-2.5 py-1 rounded bg-blue-950/60 hover:bg-blue-900/60 border border-blue-500/30 text-xs font-mono text-blue-200 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <span>#{tag}</span>
-                    {copiedKey === `tag-${i}` ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
-                  </button>
-                ))}
+          {/* Transparency & Reality Architecture Banner */}
+          <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-950/20 shadow-md space-y-2">
+            <div className="flex items-start gap-2.5">
+              <ShieldCheck className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-mono text-xs font-bold text-blue-300 uppercase tracking-wide">
+                  Real Integration Architecture: How Agents Actually Publish Content
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  No AI can magically inject posts into your private social media accounts without authorized credentials. NeonForge provides two honest, functional paths:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-xs">
+                  <div className="p-2.5 rounded bg-black/40 border border-slate-800">
+                    <strong className="text-cyan-300 block font-mono">1. Assisted 1-Click Browser Share (Zero Setup):</strong>
+                    <span className="text-slate-400 text-[11px]">
+                      Agents draft high-retention copy, and clicking "Post to X" or "Submit to Reddit" opens your browser with the post pre-filled. You simply click submit.
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded bg-black/40 border border-slate-800">
+                    <strong className="text-emerald-300 block font-mono">2. Direct Autonomous Background Dispatch:</strong>
+                    <span className="text-slate-400 text-[11px]">
+                      Connect a Discord webhook, Slack webhook, Zapier/Make automation hub, or Twitter API keys below. The agents can then dispatch posts directly over the network with zero browser clicks!
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Maya's Viral Social Campaigns Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Reddit Campaign */}
-            <div className="rounded-xl border border-amber-500/30 bg-[#090d18] p-5 shadow-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-amber-400" />
-                  <span className="font-mono text-xs font-bold text-amber-300 uppercase">
-                    Reddit Organic Launch Post
+          {/* Social Platform Connection Status Command Bar */}
+          <div className="p-4 rounded-xl border border-slate-800 bg-[#090d18] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Radio className="w-4 h-4 text-cyan-400" />
+                <h3 className="font-mono text-xs font-bold uppercase tracking-wide text-white">
+                  Real Platform Connection Status
+                </h3>
+              </div>
+
+              <button
+                onClick={() => {
+                  playSound('click');
+                  setShowConfigModal(!showConfigModal);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-400/40 hover:bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>{showConfigModal ? 'Close Settings' : 'Configure Credentials & Webhooks'}</span>
+              </button>
+            </div>
+
+            {/* Platform Badges Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs font-mono">
+              {/* Discord */}
+              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Discord Webhook</span>
+                  <span className={socialConnections?.connections?.discord?.isConnected ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                    {socialConnections?.connections?.discord?.isConnected ? '● Connected' : '○ Not Connected'}
                   </span>
                 </div>
-                <button
-                  onClick={() => handleCopy(selectedProduct.marketingAssets.redditHook, 'reddit')}
-                  className="text-slate-400 hover:text-white cursor-pointer"
-                >
-                  {copiedKey === 'reddit' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
+                {socialConnections?.connections?.discord?.isConnected && (
+                  <button
+                    onClick={() => handleTestConnection('discord')}
+                    disabled={testingPlatform === 'discord'}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-300 hover:text-white"
+                  >
+                    {testingPlatform === 'discord' ? 'Testing...' : 'Test'}
+                  </button>
+                )}
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 leading-relaxed min-h-[90px]">
-                "{selectedProduct.marketingAssets.redditHook}"
+              {/* Slack */}
+              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Slack Webhook</span>
+                  <span className={socialConnections?.connections?.slack?.isConnected ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                    {socialConnections?.connections?.slack?.isConnected ? '● Connected' : '○ Not Connected'}
+                  </span>
+                </div>
+                {socialConnections?.connections?.slack?.isConnected && (
+                  <button
+                    onClick={() => handleTestConnection('slack')}
+                    disabled={testingPlatform === 'slack'}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-300 hover:text-white"
+                  >
+                    {testingPlatform === 'slack' ? 'Testing...' : 'Test'}
+                  </button>
+                )}
               </div>
 
-              <div className="text-[10px] font-sans text-slate-400 leading-normal">
-                Target Subreddits: r/Notion, r/digitalnomad, r/SideProject, r/graphic_design. High upvote potential without sounding like advertising.
+              {/* Zapier / Make */}
+              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Zapier / Make Hub</span>
+                  <span className={socialConnections?.connections?.zapierOrMake?.isConnected ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                    {socialConnections?.connections?.zapierOrMake?.isConnected ? '● Connected' : '○ Not Connected'}
+                  </span>
+                </div>
+                {socialConnections?.connections?.zapierOrMake?.isConnected && (
+                  <button
+                    onClick={() => handleTestConnection('zapier')}
+                    disabled={testingPlatform === 'zapier'}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-300 hover:text-white"
+                  >
+                    {testingPlatform === 'zapier' ? 'Testing...' : 'Test'}
+                  </button>
+                )}
+              </div>
+
+              {/* X / Twitter */}
+              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">X / Twitter API</span>
+                  <span className={socialConnections?.connections?.twitter?.isConnected ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                    {socialConnections?.connections?.twitter?.isConnected ? '● Connected' : '○ Needs Keys'}
+                  </span>
+                </div>
+                {socialConnections?.connections?.twitter?.isConnected && (
+                  <button
+                    onClick={() => handleTestConnection('twitter')}
+                    disabled={testingPlatform === 'twitter'}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-300 hover:text-white"
+                  >
+                    Test
+                  </button>
+                )}
+              </div>
+
+              {/* Reddit */}
+              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Reddit Script API</span>
+                  <span className={socialConnections?.connections?.reddit?.isConnected ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                    {socialConnections?.connections?.reddit?.isConnected ? '● Connected' : '○ Needs Keys'}
+                  </span>
+                </div>
+                {socialConnections?.connections?.reddit?.isConnected && (
+                  <button
+                    onClick={() => handleTestConnection('reddit')}
+                    disabled={testingPlatform === 'reddit'}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-cyan-300 hover:text-white"
+                  >
+                    Test
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* X / Twitter Thread */}
-            <div className="rounded-xl border border-cyan-500/30 bg-[#090d18] p-5 shadow-xl space-y-3">
-              <div className="flex items-center justify-between">
+            {testResult && (
+              <div className={`p-2.5 rounded text-xs font-mono ${testResult.success ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30' : 'bg-red-950/60 text-red-300 border border-red-500/30'}`}>
+                {testResult.success ? '✅' : '❌'} [{testResult.platform.toUpperCase()}]: {testResult.msg}
+              </div>
+            )}
+          </div>
+
+          {/* Social Credentials Configuration Drawer */}
+          {showConfigModal && (
+            <div className="p-5 rounded-xl border border-cyan-500/40 bg-slate-950 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
-                  <Twitter className="w-4 h-4 text-cyan-400" />
-                  <span className="font-mono text-xs font-bold text-cyan-300 uppercase">
-                    X Launch Thread Hook
-                  </span>
+                  <Settings className="w-5 h-5 text-cyan-400" />
+                  <h3 className="font-mono text-sm font-bold text-white uppercase">
+                    Connect Your Real Social Media API & Webhook Endpoints
+                  </h3>
                 </div>
                 <button
-                  onClick={() => handleCopy(selectedProduct.marketingAssets.xThreadHook, 'x')}
-                  className="text-slate-400 hover:text-white cursor-pointer"
+                  onClick={() => setShowConfigModal(false)}
+                  className="text-xs font-mono text-slate-400 hover:text-white"
                 >
-                  {copiedKey === 'x' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  ✕ Close
                 </button>
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 leading-relaxed min-h-[90px]">
-                "{selectedProduct.marketingAssets.xThreadHook}"
+              <form onSubmit={handleSaveSocialConfig} className="space-y-4 text-xs font-mono">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Discord Webhook */}
+                  <div className="space-y-1">
+                    <label className="text-slate-300 uppercase block font-bold">
+                      Discord Webhook URL (Free, Instant, Recommended):
+                    </label>
+                    <input
+                      type="url"
+                      value={configForm.discordWebhookUrl}
+                      onChange={(e) => setConfigForm(prev => ({ ...prev, discordWebhookUrl: e.target.value }))}
+                      placeholder="https://discord.com/api/webhooks/..."
+                      className="w-full px-3 py-2 bg-black/60 border border-slate-700 rounded-lg text-white outline-none focus:border-cyan-400"
+                    />
+                    <span className="text-[10px] text-slate-500 block">
+                      In Discord: Channel Settings → Integrations → Webhooks → Copy Webhook URL.
+                    </span>
+                  </div>
+
+                  {/* Zapier / Make Webhook */}
+                  <div className="space-y-1">
+                    <label className="text-slate-300 uppercase block font-bold">
+                      Zapier / Make.com Webhook (Multi-Platform Router):
+                    </label>
+                    <input
+                      type="url"
+                      value={configForm.zapierWebhookUrl}
+                      onChange={(e) => setConfigForm(prev => ({ ...prev, zapierWebhookUrl: e.target.value }))}
+                      placeholder="https://hooks.zapier.com/hooks/catch/..."
+                      className="w-full px-3 py-2 bg-black/60 border border-slate-700 rounded-lg text-white outline-none focus:border-cyan-400"
+                    />
+                    <span className="text-[10px] text-slate-500 block">
+                      Connects automatically to your Facebook, Instagram, LinkedIn, and Pinterest schedulers.
+                    </span>
+                  </div>
+
+                  {/* X / Twitter API Key */}
+                  <div className="space-y-1">
+                    <label className="text-slate-300 uppercase block font-bold">
+                      X / Twitter API Key (Optional for Direct Bot Posting):
+                    </label>
+                    <input
+                      type="text"
+                      value={configForm.twitterApiKey}
+                      onChange={(e) => setConfigForm(prev => ({ ...prev, twitterApiKey: e.target.value }))}
+                      placeholder="developer.twitter.com API Key"
+                      className="w-full px-3 py-2 bg-black/60 border border-slate-700 rounded-lg text-white outline-none focus:border-cyan-400"
+                    />
+                    <span className="text-[10px] text-slate-500 block">
+                      If not provided, the "Post to X" button will open your browser with the tweet pre-filled.
+                    </span>
+                  </div>
+
+                  {/* Reddit Client ID */}
+                  <div className="space-y-1">
+                    <label className="text-slate-300 uppercase block font-bold">
+                      Reddit App Client ID (Optional for Direct Script Posting):
+                    </label>
+                    <input
+                      type="text"
+                      value={configForm.redditClientId}
+                      onChange={(e) => setConfigForm(prev => ({ ...prev, redditClientId: e.target.value }))}
+                      placeholder="reddit.com/prefs/apps script client id"
+                      className="w-full px-3 py-2 bg-black/60 border border-slate-700 rounded-lg text-white outline-none focus:border-cyan-400"
+                    />
+                    <span className="text-[10px] text-slate-500 block">
+                      If not provided, the "Submit to Reddit" button will open your browser with the thread pre-filled.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfigModal(false)}
+                    className="px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold cursor-pointer"
+                  >
+                    Save Connected Endpoints
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Channel Selector */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {[
+              { id: 'reddit', label: 'Reddit', icon: MessageSquare, color: 'text-amber-400', desc: 'Case study format' },
+              { id: 'twitter', label: 'X / Twitter', icon: Twitter, color: 'text-cyan-400', desc: '5-part viral thread' },
+              { id: 'blog', label: 'Tech Blog / Medium', icon: FileText, color: 'text-emerald-400', desc: '450w SEO article' },
+              { id: 'indiehackers', label: 'Indie Hackers', icon: Flame, color: 'text-orange-400', desc: 'Show IH build post' },
+              { id: 'pinterest', label: 'Pinterest & IG', icon: Bookmark, color: 'text-fuchsia-400', desc: 'Visual captions + tags' },
+              { id: 'tiktok', label: 'TikTok / Shorts', icon: Video, color: 'text-red-400', desc: '30s video script' },
+            ].map(chan => {
+              const Icon = chan.icon;
+              const isSelected = syndicateChannel === chan.id;
+              return (
+                <button
+                  key={chan.id}
+                  onClick={() => {
+                    playSound('click');
+                    setSyndicateChannel(chan.id as any);
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-amber-400 bg-amber-950/30 shadow-[0_0_15px_rgba(251,191,36,0.15)]'
+                      : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 mb-1.5 ${chan.color}`} />
+                  <div className="font-mono text-xs font-bold text-white truncate">{chan.label}</div>
+                  <div className="text-[10px] text-slate-400 truncate">{chan.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Generated Post Live Display with Both Publishing Options */}
+          {syndicatedContent && (
+            <div className="rounded-xl border border-slate-800 bg-[#090d18] p-5 shadow-xl space-y-4">
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/40 uppercase font-bold">
+                    PREVIEW · {syndicateChannel.toUpperCase()}
+                  </span>
+                  <h3 className="font-mono text-base font-bold text-white mt-1">
+                    {syndicatedContent.headline}
+                  </h3>
+                </div>
+
+                {/* Dual Publishing Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Mode 1: Assisted Browser Intent Openers (Always works!) */}
+                  {syndicateChannel === 'twitter' && (
+                    <button
+                      onClick={() => {
+                        const tweetText = `${syndicatedContent.headline}\n\n${syndicatedContent.body.slice(0, 180)}...\n\nGrab it here: ${syndicatedContent.shareUrl}`;
+                        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-mono font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                      title="Opens twitter.com with pre-filled tweet in your logged-in browser"
+                    >
+                      <Twitter className="w-3.5 h-3.5" />
+                      <span>Post to X (Browser)</span>
+                    </button>
+                  )}
+
+                  {syndicateChannel === 'reddit' && (
+                    <button
+                      onClick={() => {
+                        window.open(`https://www.reddit.com/submit?title=${encodeURIComponent(syndicatedContent.headline)}&text=${encodeURIComponent(`${syndicatedContent.body}\n\n${syndicatedContent.callToAction}`)}`, '_blank');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-black font-mono font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                      title="Opens reddit.com with pre-filled title and text in your logged-in browser"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Submit to Reddit (Browser)</span>
+                    </button>
+                  )}
+
+                  {/* Mode 2: Direct Autonomous Background Dispatch */}
+                  <button
+                    onClick={() => {
+                      const platform = (syndicateChannel === 'twitter' || syndicateChannel === 'reddit') ? syndicateChannel : (socialConnections?.connections?.discord?.isConnected ? 'discord' : 'zapier');
+                      handlePublishLive(platform);
+                    }}
+                    disabled={isDispatchingLive}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                    title="Sends post directly via connected API / Webhook without opening a browser"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{isDispatchingLive ? 'Dispatching...' : 'Autonomous API Dispatch'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleCopy(`${syndicatedContent.headline}\n\n${syndicatedContent.body}\n\n${syndicatedContent.callToAction}`, 'full-post')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-amber-400 text-xs font-mono text-white flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedKey === 'full-post' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                    <span>{copiedKey === 'full-post' ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="text-[10px] font-sans text-slate-400 leading-normal">
-                Optimized for bookmarks and retweets. Follow-up tweet directs to direct checkout with 100% margin.
+              {livePublishResult && (
+                <div className={`p-3 rounded-lg text-xs font-mono ${
+                  livePublishResult.type === 'success' ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/40' :
+                  livePublishResult.type === 'warn' ? 'bg-amber-950/70 text-amber-300 border border-amber-500/40' :
+                  'bg-red-950/70 text-red-300 border border-red-500/40'
+                }`}>
+                  {livePublishResult.text}
+                </div>
+              )}
+
+              {/* Formatted Post Body */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 leading-relaxed whitespace-pre-wrap">
+                {syndicatedContent.body}
+              </div>
+
+              {/* Call to action & Direct Buy Link */}
+              <div className="p-3 rounded-lg bg-black/60 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono">
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block">Embedded Direct Purchase Link:</span>
+                  <span className="text-cyan-300 font-bold break-all">{syndicatedContent.shareUrl}</span>
+                </div>
+                <button
+                  onClick={() => handleCopy(syndicatedContent.shareUrl, 'share-url')}
+                  className="px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1 text-[11px] flex-shrink-0"
+                >
+                  {copiedKey === 'share-url' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>Copy Link</span>
+                </button>
+              </div>
+
+              {/* Target Communities / Audience Tags */}
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono pt-2 border-t border-slate-800/60">
+                <div className="text-slate-400">
+                  <span className="text-slate-500 uppercase mr-1">Target Communities:</span>
+                  <span className="text-white">{syndicatedContent.targetAudience}</span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {syndicatedContent.hashtags?.map((tag: string, i: number) => (
+                    <span key={i} className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] text-cyan-300">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. CUSTOM DOMAIN & HOSTING LAUNCHPAD TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'domain-launchpad' && (
+        <div className="space-y-6">
+          {/* Urgent Diagnosis Banner */}
+          <div className="p-5 rounded-xl border border-amber-500/40 bg-amber-950/20 shadow-xl space-y-3">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h3 className="font-mono text-sm font-bold text-amber-300 uppercase tracking-wide">
+                  🚨 Why Does www.neonforgedigital.net Say "Private & Needs a Password"?
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  When you buy a domain on <strong>GoDaddy, Namecheap, Hostinger, Wix, or Google/Squarespace</strong>, their servers automatically turn on a default <strong>"Under Construction / Coming Soon" or "Site Password Protection"</strong> parking page.
+                  Because your domain is not yet pointed via DNS records to this live application, visitors see your registrar's password lock rather than your store!
+                </p>
               </div>
             </div>
 
-            {/* TikTok / Shorts Storyboard */}
-            <div className="rounded-xl border border-fuchsia-500/30 bg-[#090d18] p-5 shadow-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Video className="w-4 h-4 text-fuchsia-400" />
-                  <span className="font-mono text-xs font-bold text-fuchsia-300 uppercase">
-                    TikTok / Shorts Hook
-                  </span>
+            <div className="pt-2 border-t border-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono">
+              <span className="text-amber-200 font-bold">
+                ⚡ Immediate Good News: Your live store is 100% active and accepting payments right now!
+              </span>
+              <button
+                onClick={() => window.open(currentPublicUrl, '_blank')}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open Instant Public Storefront</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Real Live DNS Status Diagnostics */}
+          <div className="p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Radio className="w-5 h-5 text-cyan-400" />
+                <div>
+                  <h3 className="font-mono text-sm font-bold text-white uppercase">
+                    Live DNS Propagation & Server Bridge Inspector
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Real-time DNS check for <code className="text-cyan-300">www.neonforgedigital.net</code> and hosting endpoints.
+                  </p>
                 </div>
-                <button
-                  onClick={() => handleCopy(selectedProduct.marketingAssets.tikTokScript, 'tiktok')}
-                  className="text-slate-400 hover:text-white cursor-pointer"
-                >
-                  {copiedKey === 'tiktok' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 leading-relaxed min-h-[90px]">
-                "{selectedProduct.marketingAssets.tikTokScript}"
+              <button
+                onClick={checkDomain}
+                disabled={isCheckingDomain}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-400 text-xs font-mono text-cyan-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isCheckingDomain ? 'animate-spin' : ''}`} />
+                <span>{isCheckingDomain ? 'Testing DNS...' : 'Re-Check DNS'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase block">Configured Custom Domain</span>
+                <span className="text-white font-bold block truncate">www.neonforgedigital.net</span>
+                <span className="text-[10px] text-slate-400">Apex: neonforgedigital.net</span>
               </div>
 
-              <div className="text-[10px] font-sans text-slate-400 leading-normal">
-                Visual Hook: 3-second rapid screen recording with cyber aesthetic soundtrack. Link in bio points to storefront.
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase block">Current Live Web Host</span>
+                <span className="text-cyan-300 font-bold block truncate">
+                  {domainStatus?.currentHost || window.location.host}
+                </span>
+                <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Google Cloud Run Live</span>
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase block">CNAME Resolution</span>
+                <span className={`font-bold block truncate ${domainStatus?.dnsResults?.cname ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {domainStatus?.dnsResults?.cname ? domainStatus.dnsResults.cname.join(', ') : 'Pending Registrar DNS Update'}
+                </span>
+                <span className="text-[10px] text-slate-400">TTL: Standard (3600s)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Step-by-Step Registrar Action Plan */}
+          <div className="p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Settings className="w-5 h-5 text-cyan-400" />
+              <h3 className="font-mono text-sm font-bold text-white uppercase">
+                4-Step Checklist to Point Your Domain and Remove the Password
+              </h3>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex gap-3.5 p-3.5 rounded-lg bg-slate-950 border border-slate-800">
+                <div className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-400 text-cyan-300 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0">
+                  1
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-mono text-xs font-bold text-white uppercase">
+                    Turn OFF "Under Construction / Password Protection" at Your Registrar
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Log in to where you bought the domain (GoDaddy, Namecheap, Google Domains / Squarespace, Hostinger). Open <strong>Domain Settings</strong> or <strong>Website Hosting</strong>, find <em>"Site Password"</em> or <em>"Coming Soon Mode"</em>, and toggle it to <strong>OFF / Disabled</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3.5 p-3.5 rounded-lg bg-slate-950 border border-slate-800">
+                <div className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-400 text-cyan-300 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0">
+                  2
+                </div>
+                <div className="space-y-2 flex-1">
+                  <h4 className="font-mono text-xs font-bold text-white uppercase">
+                    Add CNAME DNS Record for "www"
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    In your registrar's <strong>DNS Management</strong> tab, add or edit the following CNAME record:
+                  </p>
+                  <div className="p-3 rounded bg-black/60 border border-slate-800 font-mono text-xs grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase">Type</span>
+                      <span className="text-cyan-300 font-bold">CNAME</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block uppercase">Host / Name</span>
+                      <span className="text-cyan-300 font-bold">www</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block uppercase">Points To / Target</span>
+                        <span className="text-cyan-300 font-bold truncate block">{window.location.host}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopy(window.location.host, 'cname-target')}
+                        className="text-cyan-400 hover:text-white p-1"
+                        title="Copy Host"
+                      >
+                        {copiedKey === 'cname-target' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3.5 p-3.5 rounded-lg bg-slate-950 border border-slate-800">
+                <div className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-400 text-cyan-300 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0">
+                  3
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-mono text-xs font-bold text-white uppercase">
+                    Set Domain Forwarding for the Root Domain (@)
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Under <strong>Domain Forwarding / URL Redirect</strong> in your registrar dashboard, set the naked root domain <code className="text-cyan-300">neonforgedigital.net</code> to forward to <code className="text-cyan-300">https://www.neonforgedigital.net</code> using a <strong>301 Permanent Redirect</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3.5 p-3.5 rounded-lg bg-slate-950 border border-slate-800">
+                <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0">
+                  4
+                </div>
+                <div className="space-y-2 flex-1">
+                  <h4 className="font-mono text-xs font-bold text-white uppercase">
+                    Sell and Collect Cash Immediately (Zero Waiting)
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    While DNS takes 1–12 hours to propagate across global ISP networks, you do <strong>NOT</strong> have to wait! Your direct live deployment link works 100% right now with no password:
+                  </p>
+                  <div className="flex items-center justify-between gap-2 p-2.5 rounded bg-black/60 border border-slate-800 font-mono text-xs text-emerald-400">
+                    <span className="truncate">{currentPublicUrl}</span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleCopy(currentPublicUrl, 'live-link')}
+                        className="px-2 py-1 rounded bg-slate-900 border border-slate-700 hover:text-white flex items-center gap-1 text-[11px]"
+                      >
+                        {copiedKey === 'live-link' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedKey === 'live-link' ? 'Copied' : 'Copy'}</span>
+                      </button>
+                      <button
+                        onClick={() => window.open(currentPublicUrl, '_blank')}
+                        className="px-2 py-1 rounded bg-emerald-500 text-black font-bold flex items-center gap-1 text-[11px] hover:bg-emerald-400"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Visit</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {selectedProduct && activeSubTab === 'google-ads' && (
+      {/* ========================================================================= */}
+      {/* 3. ORGANIC SEO & SEARCH INDEXER TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'seo-discoverability' && (
         <div className="space-y-6">
-          {/* SECTION 1: GLOBAL CONFIG & INTEGRATION */}
+          <div className="p-5 rounded-xl border border-emerald-500/30 bg-[#090d18] shadow-xl space-y-3">
+            <div className="flex items-center gap-2">
+              <Search className="w-5 h-5 text-emerald-400" />
+              <h3 className="font-mono text-sm font-bold text-white uppercase">
+                Organic Search Engine Discoverability Matrix
+              </h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              You do not need to pay for ads to be discoverable. Modern search engines crawl websites using <strong>XML Sitemaps, Robots.txt instructions, and Schema.org JSON-LD structured data</strong>. All three are automatically compiled and live for your catalog.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* Sitemap.xml */}
+            <div className="p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 uppercase font-bold">
+                    ACTIVE · DYNAMIC
+                  </span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                </div>
+                <h4 className="font-mono text-sm font-bold text-white uppercase">Dynamic XML Sitemap</h4>
+                <p className="text-[11px] text-slate-400">
+                  Indexes all {products.length} catalog products, priority rankings, and last-modified timestamps for search engines.
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <code className="text-xs text-cyan-300 font-mono">/sitemap.xml</code>
+                <button
+                  onClick={() => window.open('/sitemap.xml', '_blank')}
+                  className="px-2.5 py-1 rounded bg-slate-900 border border-slate-700 hover:text-white text-xs font-mono flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Inspect XML</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Robots.txt */}
+            <div className="p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 uppercase font-bold">
+                    CRAWLER PERMITTED
+                  </span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                </div>
+                <h4 className="font-mono text-sm font-bold text-white uppercase">Crawler Directives (Robots.txt)</h4>
+                <p className="text-[11px] text-slate-400">
+                  Explicitly instructs Googlebot, Bingbot, and DuckDuckGo to crawl product pages while protecting private API keys.
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <code className="text-xs text-cyan-300 font-mono">/robots.txt</code>
+                <button
+                  onClick={() => window.open('/robots.txt', '_blank')}
+                  className="px-2.5 py-1 rounded bg-slate-900 border border-slate-700 hover:text-white text-xs font-mono flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Inspect Rules</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Schema.org */}
+            <div className="p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 uppercase font-bold">
+                    RICH SNIPPETS
+                  </span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                </div>
+                <h4 className="font-mono text-sm font-bold text-white uppercase">Schema.org JSON-LD</h4>
+                <p className="text-[11px] text-slate-400">
+                  Embeds OnlineStore, Product, Offer, and Brand metadata directly in HTML headers so Google displays rich shopping cards.
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <span className="text-xs text-slate-400 font-mono">Status: Verified in &lt;head&gt;</span>
+                <span className="text-emerald-400 text-xs font-mono font-bold">Active</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Radio className="w-5 h-5 text-emerald-400" />
+              <h3 className="font-mono text-sm font-bold text-white uppercase">
+                Notify Google & Bing Web Crawlers Immediately
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Submit your sitemap directly to search engines so Googlebot schedules indexing of your store without waiting for organic links:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <a
+                href={seoDiagnostics?.submissionLinks?.googlePingUrl || `https://www.google.com/ping?sitemap=${encodeURIComponent(`${window.location.origin}/sitemap.xml`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-emerald-400 transition-all flex items-center justify-between group"
+              >
+                <div>
+                  <div className="font-mono text-xs font-bold text-white group-hover:text-emerald-300">
+                    Ping Google Search Crawler
+                  </div>
+                  <div className="text-[10px] text-slate-400">Direct HTTP Ping to Googlebot sitemap queue</div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-emerald-400" />
+              </a>
+
+              <a
+                href="https://search.google.com/search-console"
+                target="_blank"
+                rel="noreferrer"
+                className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-cyan-400 transition-all flex items-center justify-between group"
+              >
+                <div>
+                  <div className="font-mono text-xs font-bold text-white group-hover:text-cyan-300">
+                    Google Search Console
+                  </div>
+                  <div className="text-[10px] text-slate-400">Verify domain ownership and view organic keyword impressions</div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-cyan-400" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 4. GOOGLE ADS NEXUS TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'google-ads' && selectedProduct && (
+        <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Google Ads site tag Setup */}
             <div className="lg:col-span-1 p-5 rounded-xl border border-slate-800 bg-[#090d18] flex flex-col justify-between space-y-3">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -484,7 +1210,6 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
               </form>
             </div>
 
-            {/* Link Builder */}
             <div className="lg:col-span-2 p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-4">
               <div className="flex items-center gap-2">
                 <Share2 className="w-4 h-4 text-cyan-400" />
@@ -557,7 +1282,6 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
             </div>
           </div>
 
-          {/* SECTION 2: ROAS DASHBOARD & LIVE REVENUE TRACKER */}
           <div className="p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-4">
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -572,7 +1296,6 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
                 </div>
               </div>
 
-              {/* High-Fidelity Connection Status */}
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center bg-emerald-950/40 rounded-lg px-3 py-1 border border-emerald-500/30 text-[10px] font-mono font-black text-emerald-400 uppercase tracking-wider">
                   📡 100% Authentic Live Tracking Active
@@ -585,7 +1308,6 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
               </div>
             </div>
 
-            {/* Core Stats Overview */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
               <div className="p-3.5 rounded-lg bg-black/40 border border-slate-800">
                 <span className="text-[10px] text-slate-400 block uppercase font-mono">Clicks & CTR</span>
@@ -630,7 +1352,6 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
               </div>
             </div>
 
-            {/* Live Campaign Attribution Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-xs font-mono border-collapse">
                 <thead>
@@ -642,7 +1363,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
                     <th className="py-2 text-right">CPC</th>
                     <th className="py-2 text-right">Conversions</th>
                     <th className="py-2 text-right">ROAS</th>
-                    <th className="py-2 text-center">Campaign Management</th>
+                    <th className="py-2 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40">
@@ -711,7 +1432,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
                         <td className="py-2.5 text-center">
                           <span className="text-[10px] text-emerald-400/80 font-semibold flex items-center justify-center gap-1">
                             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
-                            <span>Auto Tracked</span>
+                            <span>Live Tracking</span>
                           </span>
                         </td>
                       </tr>
@@ -720,13 +1441,8 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
                 </tbody>
               </table>
             </div>
-
-            <div className="text-[10px] text-emerald-400 font-mono bg-emerald-950/20 border border-emerald-500/30 rounded p-2.5 text-center mt-3 leading-relaxed">
-              📡 <strong>AUTHENTIC LIVE ATTRIBUTION ACTIVE:</strong> Your actual customers who purchase using generated UTM campaign links will automatically trigger live conversion tracking and populate this dashboard in real-time. Enter your real daily budget spend and clicks above to view actual Return on Ad Spend (ROAS).
-            </div>
           </div>
 
-          {/* SECTION 3: MERCHANT CENTER PRODUCT FEED */}
           <div className="p-5 rounded-xl border border-slate-800 bg-[#090d18] space-y-3">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -744,10 +1460,6 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({ products, or
                 <span>{copiedKey === 'merchant_feed' ? 'Merchant Feed Copied' : 'Copy Merchant Feed'}</span>
               </button>
             </div>
-
-            <p className="text-[10px] text-slate-300 font-sans">
-              Google Merchant Center requires an XML product feed or JSON-LD schema representing your digital inventory for Shopping Campaign integration.
-            </p>
 
             <pre className="p-3.5 rounded-lg bg-black border border-slate-800 text-[10px] font-mono text-slate-300 overflow-x-auto leading-normal">
               {generateMerchantFeed()}

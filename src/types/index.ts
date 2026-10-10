@@ -271,3 +271,20 @@ export interface MultiChannelStats {
   directGross: number;
   totalSyncedSkuCount: number;
 }
+
+export interface SocialPlatformConfig {
+  discordWebhookUrl?: string;
+  slackWebhookUrl?: string;
+  zapierWebhookUrl?: string;
+  makeWebhookUrl?: string;
+  twitterApiKey?: string;
+  twitterApiSecret?: string;
+  twitterAccessToken?: string;
+  twitterAccessSecret?: string;
+  redditClientId?: string;
+  redditClientSecret?: string;
+  redditUsername?: string;
+  redditPassword?: string;
+  lastDispatchedAt?: string;
+  totalDispatchedPosts?: number;
+}

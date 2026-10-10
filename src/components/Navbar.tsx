@@ -347,7 +347,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </button>
 
-          {/* Customer Store Preview */}
+          {/* Customer Store Preview & Lock Matrix */}
+          <button
+            onClick={() => {
+              playSound('click');
+              onOpenStorePreview();
+            }}
+            className="px-3 py-1.5 rounded-lg font-mono text-xs font-bold border transition-colors flex items-center gap-1.5 shadow-md"
+            style={{
+              backgroundColor: '#090d18',
+              borderColor: '#ef4444',
+              color: '#f87171'
+            }}
+            title="Lock Matrix & Switch to Customer Storefront (Requires Admin Password to re-enter)"
+          >
+            <span>🔒 LOCK MATRIX</span>
+          </button>
+
           <button
             onClick={() => {
               playSound('click');

@@ -320,6 +320,19 @@ class NeonForgeApiService {
     }
   }
 
+  async addTicket(ticket: SupportTicket): Promise<boolean> {
+    try {
+      const res = await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   async triggerOverdrive(): Promise<{ success: boolean; velocity: number }> {
     try {
       const res = await fetch('/api/overdrive', { method: 'POST' });
@@ -743,6 +756,158 @@ class NeonForgeApiService {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  async getDomainStatus(): Promise<{
+    success: boolean;
+    configuredDomain: string;
+    rootDomain: string;
+    currentHost: string;
+    immediateLiveUrl: string;
+    isDnsPointingToHost: boolean;
+    dnsResults: any;
+    registrarGuidance: {
+      whyPrivatePasswordShows: string;
+      stepsToFix: Array<{ step: number; title: string; detail: string }>;
+    };
+  } | null> {
+    try {
+      const res = await fetch('/api/domain/status');
+      if (res.ok) return await res.json();
+    } catch (e) {
+      console.warn('[NeonForge API] getDomainStatus failed', e);
+    }
+    return null;
+  }
+
+  async syndicateMarketing(productId: string, channel: string): Promise<{
+    success: boolean;
+    product: { id: string; title: string; price: number; sku: string };
+    campaign: {
+      headline: string;
+      body: string;
+      callToAction: string;
+      hashtags: string[];
+      targetAudience: string;
+      channel: string;
+      shareUrl: string;
+    };
+  } | null> {
+    try {
+      const res = await fetch('/api/marketing/syndicate', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ productId, channel })
+      });
+      if (res.ok) return await res.json();
+    } catch (e) {
+      console.warn('[NeonForge API] syndicateMarketing failed', e);
+    }
+    return null;
+  }
+
+  async dispatchMarketingWebhook(payload: {
+    webhookUrl: string;
+    campaign: any;
+    productTitle: string;
+    channel: string;
+  }): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const res = await fetch('/api/marketing/dispatch-webhook', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async getSeoDiagnostics(): Promise<{
+    success: boolean;
+    sitemapUrl: string;
+    robotsUrl: string;
+    totalProductsIndexed: number;
+    canonicalDomain: string;
+    schemaTypesConfigured: string[];
+    submissionLinks: {
+      googleSearchConsole: string;
+      googlePingUrl: string;
+      bingPingUrl: string;
+    };
+  } | null> {
+    try {
+      const res = await fetch('/api/seo/diagnostics');
+      if (res.ok) return await res.json();
+    } catch (e) {
+      console.warn('[NeonForge API] getSeoDiagnostics failed', e);
+    }
+    return null;
+  }
+
+  async getSocialConnections(): Promise<{
+    success: boolean;
+    connections: {
+      discord: { isConnected: boolean; urlMasked?: string; type: string };
+      slack: { isConnected: boolean; urlMasked?: string; type: string };
+      zapierOrMake: { isConnected: boolean; urlMasked?: string; type: string };
+      twitter: { isConnected: boolean; keyMasked?: string; type: string };
+      reddit: { isConnected: boolean; username?: string; type: string };
+    };
+    lastDispatchedAt?: string;
+    totalDispatchedPosts: number;
+  } | null> {
+    try {
+      const res = await fetch('/api/social/connections');
+      if (res.ok) return await res.json();
+    } catch (e) {
+      console.warn('[NeonForge API] getSocialConnections failed', e);
+    }
+    return null;
+  }
+
+  async saveSocialConfig(cfg: any): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await fetch('/api/social/config', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(cfg)
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  }
+
+  async testSocialConnection(platform: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const res = await fetch('/api/social/test-connection', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ platform })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async publishSocialLive(payload: {
+    platform: string;
+    campaign: any;
+    productTitle: string;
+  }): Promise<{ success: boolean; message?: string; error?: string; requiresAuth?: boolean }> {
+    try {
+      const res = await fetch('/api/social/publish-live', {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
   }
 }
 
